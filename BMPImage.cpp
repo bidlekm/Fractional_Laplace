@@ -109,29 +109,28 @@ void BMPImage::SaveBMP(const char *filename)
     }
 
     unsigned char bmpFileHeader[14] = {
-        'B', 'M',   // Signature
-        0, 0, 0, 0, // File size in bytes
-        0, 0,       // Reserved
-        0, 0,       // Reserved
-        54, 0, 0, 0 // Start of pixel array (54 bytes)
-    };
+        'B', 'M',
+        0, 0, 0, 0,
+        0, 0,
+        0, 0,
+        54, 0, 0, 0};
 
     unsigned char bmpInfoHeader[40] = {
-        40, 0, 0, 0, // Header size (40 bytes)
-        0, 0, 0, 0,  // Image width
-        0, 0, 0, 0,  // Image height
-        1, 0,        // Number of color planes
-        24, 0,       // Bits per pixel (24 for RGB)
-        0, 0, 0, 0,  // Compression (0 = none)
-        0, 0, 0, 0,  // Image size (can be 0 for uncompressed)
-        0, 0, 0, 0,  // Horizontal resolution (pixels per meter)
-        0, 0, 0, 0,  // Vertical resolution (pixels per meter)
-        0, 0, 0, 0,  // Number of colors in palette
-        0, 0, 0, 0   // Important colors (0 = all)
-    };
+        40, 0, 0, 0,
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+        1, 0,
+        24, 0,
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+        0, 0, 0, 0,
+        0, 0, 0, 0};
 
-    int bytesPerPixel = 3; // 3 bytes per pixel for RGB
-    int imageSize = this->width * this->height * bytesPerPixel;
+    int bytesPerPixel = 3;
+    int paddedRowSize = (width * bytesPerPixel + 3) & (~3);
+    int imageSize = paddedRowSize * height;
     int fileSize = 54 + imageSize;
 
     bmpFileHeader[2] = (unsigned char)(fileSize);
@@ -139,22 +138,29 @@ void BMPImage::SaveBMP(const char *filename)
     bmpFileHeader[4] = (unsigned char)(fileSize >> 16);
     bmpFileHeader[5] = (unsigned char)(fileSize >> 24);
 
-    bmpInfoHeader[4] = (unsigned char)(this->width);
-    bmpInfoHeader[5] = (unsigned char)(this->width >> 8);
-    bmpInfoHeader[6] = (unsigned char)(this->width >> 16);
-    bmpInfoHeader[7] = (unsigned char)(this->width >> 24);
+    bmpInfoHeader[4] = (unsigned char)(width);
+    bmpInfoHeader[5] = (unsigned char)(width >> 8);
+    bmpInfoHeader[6] = (unsigned char)(width >> 16);
+    bmpInfoHeader[7] = (unsigned char)(width >> 24);
 
-    bmpInfoHeader[8] = (unsigned char)(this->height);
-    bmpInfoHeader[9] = (unsigned char)(this->height >> 8);
-    bmpInfoHeader[10] = (unsigned char)(this->height >> 16);
-    bmpInfoHeader[11] = (unsigned char)(this->height >> 24);
+    bmpInfoHeader[8] = (unsigned char)(height);
+    bmpInfoHeader[9] = (unsigned char)(height >> 8);
+    bmpInfoHeader[10] = (unsigned char)(height >> 16);
+    bmpInfoHeader[11] = (unsigned char)(height >> 24);
 
     file.write(reinterpret_cast<char *>(bmpFileHeader), sizeof(bmpFileHeader));
     file.write(reinterpret_cast<char *>(bmpInfoHeader), sizeof(bmpInfoHeader));
 
-    for (int y = this->height - 1; y >= 0; y--)
+    unsigned char padding[3] = {0, 0, 0};
+    for (int y = 0; y < height; y++)
     {
-        file.write(reinterpret_cast<char *>(this->data + (y * this->width * bytesPerPixel)), this->width * bytesPerPixel);
+        for (int x = 0; x < width; x++)
+        {
+            unsigned char grayscaleValue = data[y * width + x];
+            unsigned char rgb[3] = {grayscaleValue, grayscaleValue, grayscaleValue};
+            file.write(reinterpret_cast<char *>(rgb), bytesPerPixel);
+        }
+        file.write(reinterpret_cast<char *>(padding), (paddedRowSize - width * bytesPerPixel));
     }
 
     file.close();
