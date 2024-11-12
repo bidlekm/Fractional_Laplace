@@ -164,13 +164,4 @@ void BMPImage::SaveBMP(const char *filename)
     }
 
     file.close();
-
-    if (file)
-    {
-        std::cout << "Image saved successfully" << std::endl;
-    }
-    else
-    {
-        std::cerr << "Error while saving image" << std::endl;
-    }
 }
