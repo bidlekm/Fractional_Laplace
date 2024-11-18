@@ -15,7 +15,7 @@
         std::abort();                                                    \
     }
 
-// Templated Laplacian function
+
 template <typename Number>
 void applyLaplacian(const unsigned char *input, std::vector<Number> &output, int width, int height)
 {
@@ -41,7 +41,6 @@ void applyLaplacian(const unsigned char *input, std::vector<Number> &output, int
     }
 }
 
-// Templated CUDA kernel for gradient descent
 template <typename Number>
 __global__ void gradDescCuda(Number *x, const Number *b, const Number *laplacian, Number mu, Number learningRate, int width, int height, int maxIterations)
 {
@@ -58,7 +57,6 @@ __global__ void gradDescCuda(Number *x, const Number *b, const Number *laplacian
     }
 }
 
-// Templated function to solve minimization problem using CUDA
 template <typename Number>
 void solveMinCuda(std::vector<Number> &x, const std::vector<Number> &b, const std::vector<Number> &laplacian, Number mu, int width, int height)
 {
@@ -68,25 +66,20 @@ void solveMinCuda(std::vector<Number> &x, const std::vector<Number> &b, const st
     int blockSize = 256;
     int numBlocks = (totalSize + blockSize - 1) / blockSize;
 
-    // Allocate device memory
-    Number *d_x, *d_b, *d_laplacian;
+
     AssertCuda(cudaMalloc(&d_x, totalSize * sizeof(Number)));
     AssertCuda(cudaMalloc(&d_b, totalSize * sizeof(Number)));
     AssertCuda(cudaMalloc(&d_laplacian, totalSize * sizeof(Number)));
 
-    // Copy data from host to device
     AssertCuda(cudaMemcpy(d_x, x.data(), totalSize * sizeof(Number), cudaMemcpyHostToDevice));
     AssertCuda(cudaMemcpy(d_b, b.data(), totalSize * sizeof(Number), cudaMemcpyHostToDevice));
     AssertCuda(cudaMemcpy(d_laplacian, laplacian.data(), totalSize * sizeof(Number), cudaMemcpyHostToDevice));
 
-    // Launch the CUDA kernel
     gradDescCuda<<<numBlocks, blockSize>>>(d_x, d_b, d_laplacian, mu, learningRate, width, height, maxIterations);
     AssertCuda(cudaGetLastError());
 
-    // Copy result back to host
     AssertCuda(cudaMemcpy(x.data(), d_x, totalSize * sizeof(Number), cudaMemcpyDeviceToHost));
 
-    // Free device memory
     AssertCuda(cudaFree(d_x));
     AssertCuda(cudaFree(d_b));
     AssertCuda(cudaFree(d_laplacian));
@@ -94,7 +87,7 @@ void solveMinCuda(std::vector<Number> &x, const std::vector<Number> &b, const st
 
 int main()
 {
-    using Number = float; // You can change this to double if needed
+    using Number = float;
 
     auto image = std::make_shared<BMPImage>("lena.bmp");
     int width = image->GetWidth();
@@ -119,14 +112,13 @@ int main()
     std::vector<Number> output(width * height, 0.0f);
     Number mu = 1.0f;
 
-    // Call the templated CUDA function
     solveMinCuda(output, b, laplacian, mu, width, height);
 
-    // Convert output to an image format
     auto outputImage = std::unique_ptr<unsigned char[]>(new unsigned char[width * height]);
     Number minVal = *std::min_element(output.begin(), output.end());
     Number maxVal = *std::max_element(output.begin(), output.end());
-
+    std::cout << "Min value in output: " << minVal << std::endl;
+    std::cout << "Max value in output: " << maxVal << std::endl;
     for (int i = 0; i < width * height; ++i)
     {
         outputImage[i] = static_cast<unsigned char>(std::min(std::max(int((output[i] - minVal) / (maxVal - minVal) * 255), 0), 255));
