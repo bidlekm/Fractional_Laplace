@@ -1,5 +1,7 @@
 #pragma once
 #include <vector>
+#include <Eigen/Sparse>
 
+Eigen::SparseMatrix<float> generateAMatrix(const unsigned char* inputImage, int width, int height, int kernelSize, float sigma);
 std::vector<std::vector<float>> generateGaussianKernel(const int kernelSize, const float sigma);
-void applyGaussianBlur(const unsigned char *inputImage, unsigned char *outputImage, const int width, const int height, const int kernelSize, const float sigma);
+

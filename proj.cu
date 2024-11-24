@@ -52,7 +52,7 @@ void generateLMatrix(Eigen::SparseMatrix<Number> &L, int width, int height)
 }
 
 template <typename Number>
-void printLMatrix(const Eigen::SparseMatrix<Number> &L)
+void printEigenSparseMatrix(const Eigen::SparseMatrix<Number> &L)
 {
     std::cout << "L: " << L.rows() << " x " << L.cols() << ")\n";
     for (int k = 0; k < L.outerSize(); ++k)
@@ -165,6 +165,67 @@ void solveMinCuda(std::vector<Number> &x, const std::vector<Number> &b, const Ei
 }
 
 
+
+
+template <typename Number>
+void applyGaussianBlurCuda(const unsigned char* inputImage, unsigned char* outputImage, 
+                            const int width, const int height, const int kernelSize, 
+                            const float sigma, Eigen::SparseMatrix<Number>& A)
+{
+    int totalSize = width * height;
+    int blockSize = 256;
+    int numBlocks = (totalSize + blockSize - 1) / blockSize;
+
+
+    Number* d_x;
+    Number* d_y;
+
+    cudaMalloc(&d_x, totalSize * sizeof(Number));
+    cudaMalloc(&d_y, totalSize * sizeof(Number));
+
+    Number* d_A_val;
+    int* d_A_col, *d_A_row;
+    int numNonZeros = A.nonZeros();
+
+    AssertCuda(cudaMalloc(&d_A_val, numNonZeros * sizeof(Number)));
+    AssertCuda(cudaMalloc(&d_A_col, numNonZeros * sizeof(int)));
+    AssertCuda(cudaMalloc(&d_A_row, (A.outerSize() + 1) * sizeof(int)));
+
+    AssertCuda(cudaMemcpy(d_A_val, A.valuePtr(), numNonZeros * sizeof(Number), cudaMemcpyHostToDevice));
+    AssertCuda(cudaMemcpy(d_A_col, A.innerIndexPtr(), numNonZeros * sizeof(int), cudaMemcpyHostToDevice));
+    AssertCuda(cudaMemcpy(d_A_row, A.outerIndexPtr(), (A.outerSize() + 1) * sizeof(int), cudaMemcpyHostToDevice));
+
+    std::vector<Number> x(totalSize);
+    for (int i = 0; i < totalSize; ++i)
+    {
+        x[i] = static_cast<Number>(inputImage[i]);
+    }
+    cudaMemcpy(d_x, x.data(), totalSize * sizeof(Number), cudaMemcpyHostToDevice);
+
+    
+    sparseMatVec<<<numBlocks, blockSize>>>(d_x, d_y, d_A_val, d_A_col, d_A_row, totalSize);
+    cudaDeviceSynchronize();
+
+    cudaMemcpy(x.data(), d_y, totalSize * sizeof(Number), cudaMemcpyDeviceToHost);
+
+    Number minVal = *std::min_element(x.begin(), x.end());
+    Number maxVal = *std::max_element(x.begin(), x.end());
+
+    for (int i = 0; i < totalSize; ++i)
+    {
+        outputImage[i] = static_cast<unsigned char>(
+            std::min(std::max(int((x[i] - minVal) / (maxVal - minVal) * 255), 0), 255)
+        );
+    }
+
+    cudaFree(d_x);
+    cudaFree(d_y);
+    cudaFree(d_A_val);
+    cudaFree(d_A_col);
+    cudaFree(d_A_row);
+}
+
+
 int main()
 {
     using Number = float;
@@ -172,10 +233,12 @@ int main()
     auto image = std::make_shared<BMPImage>("lena.bmp");
     int width = image->GetWidth();
     int height = image->GetHeight();
-    int kernelSize = 7;
-    Number sigma = 5.0f;
+    int kernelSize = 5;
+    Number sigma = 3.0f;
     auto blurredImage = std::unique_ptr<unsigned char[]>(new unsigned char[width * height]);
-    applyGaussianBlur(image->GetData(), blurredImage.get(), width, height, kernelSize, sigma);
+
+    Eigen::SparseMatrix<float> A = generateAMatrix(image->GetData(), width, height, kernelSize, sigma);
+    applyGaussianBlurCuda(image->GetData(), blurredImage.get(), width, height, kernelSize, sigma, A);
 
     BMPImage blurred(width, height, blurredImage.get());
     blurred.SaveBMP("lena_blurred.bmp");
@@ -183,7 +246,6 @@ int main()
 
     Eigen::SparseMatrix<Number> L;
     generateLMatrix(L, width,height);
-    //printLMatrix(L);
     
 
     std::vector<Number> b(width * height, 0.0f);

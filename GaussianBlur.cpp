@@ -1,7 +1,9 @@
-
 #include <vector>
 #include <cmath>
+#include <iostream>
+#include <algorithm>
 #include "GaussianBlur.hpp"
+
 
 std::vector<std::vector<float>> generateGaussianKernel(const int kernelSize, const float sigma)
 {
@@ -20,7 +22,6 @@ std::vector<std::vector<float>> generateGaussianKernel(const int kernelSize, con
             sum += kernel[i][j];
         }
     }
-
     for (int i = 0; i < kernelSize; ++i)
     {
         for (int j = 0; j < kernelSize; ++j)
@@ -32,29 +33,41 @@ std::vector<std::vector<float>> generateGaussianKernel(const int kernelSize, con
     return kernel;
 }
 
-void applyGaussianBlur(const unsigned char *inputImage, unsigned char *outputImage, const int width, const int height, const int kernelSize, const float sigma)
+Eigen::SparseMatrix<float> generateAMatrix(const unsigned char* inputImage, int width, int height, int kernelSize, float sigma)
 {
     std::vector<std::vector<float>> kernel = generateGaussianKernel(kernelSize, sigma);
     int half = kernelSize / 2;
+    int n = width * height;
+    
+    Eigen::SparseMatrix<float> A(n, n);
 
+    std::vector<Eigen::Triplet<float>> tripletList;
+    
     for (int y = 0; y < height; ++y)
     {
         for (int x = 0; x < width; ++x)
         {
-            float pixelSum = 0.0;
-
+            int idx = y * width + x;  // Flattened pixel index
+            
+            // Apply the kernel to the pixel and its neighbors
             for (int ky = -half; ky <= half; ++ky)
             {
                 for (int kx = -half; kx <= half; ++kx)
                 {
                     int pixelX = std::min(std::max(x + kx, 0), width - 1);
                     int pixelY = std::min(std::max(y + ky, 0), height - 1);
+                    int neighborIdx = pixelY * width + pixelX; 
+                    
 
-                    float weight = kernel[ky + half][kx + half];
-                    pixelSum += inputImage[pixelY * width + pixelX] * weight;
+                    float kernelValue = kernel[ky + half][kx + half];
+                    
+                    tripletList.push_back(Eigen::Triplet<float>(idx, neighborIdx, kernelValue));
                 }
             }
-            outputImage[y * width + x] = static_cast<unsigned char>(std::min(std::max(int(pixelSum), 0), 255));
         }
     }
+    
+    A.setFromTriplets(tripletList.begin(), tripletList.end());
+
+    return A;
 }
