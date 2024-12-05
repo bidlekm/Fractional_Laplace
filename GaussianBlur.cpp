@@ -4,13 +4,13 @@
 #include <algorithm>
 #include "GaussianBlur.hpp"
 
-
-std::vector<std::vector<float>> generateGaussianKernel(const int kernelSize, const float sigma)
+template <typename Number>
+std::vector<std::vector<Number>> generateGaussianKernel(const int kernelSize, const Number sigma)
 {
-    std::vector<std::vector<float>> kernel(kernelSize, std::vector<float>(kernelSize));
-    float sum = 0.0;
+    std::vector<std::vector<Number>> kernel(kernelSize, std::vector<Number>(kernelSize));
+    Number sum = 0.0;
     int half = kernelSize / 2;
-    float pi = 3.14159265359;
+    Number pi = 3.14159265359;
 
     for (int i = 0; i < kernelSize; ++i)
     {
@@ -33,15 +33,16 @@ std::vector<std::vector<float>> generateGaussianKernel(const int kernelSize, con
     return kernel;
 }
 
-Eigen::SparseMatrix<float> generateAMatrix(const unsigned char* inputImage, int width, int height, int kernelSize, float sigma)
+template <typename Number>
+Eigen::SparseMatrix<Number> generateAMatrix(const unsigned char* inputImage, int width, int height, int kernelSize, Number sigma)
 {
-    std::vector<std::vector<float>> kernel = generateGaussianKernel(kernelSize, sigma);
+    std::vector<std::vector<Number>> kernel = generateGaussianKernel(kernelSize, sigma);
     int half = kernelSize / 2;
     int n = width * height;
     
-    Eigen::SparseMatrix<float> A(n, n);
+    Eigen::SparseMatrix<Number> A(n, n);
 
-    std::vector<Eigen::Triplet<float>> tripletList;
+    std::vector<Eigen::Triplet<Number>> tripletList;
     
     for (int y = 0; y < height; ++y)
     {
@@ -59,9 +60,9 @@ Eigen::SparseMatrix<float> generateAMatrix(const unsigned char* inputImage, int 
                     int neighborIdx = pixelY * width + pixelX; 
                     
 
-                    float kernelValue = kernel[ky + half][kx + half];
+                    Number kernelValue = kernel[ky + half][kx + half];
                     
-                    tripletList.push_back(Eigen::Triplet<float>(idx, neighborIdx, kernelValue));
+                    tripletList.push_back(Eigen::Triplet<Number>(idx, neighborIdx, kernelValue));
                 }
             }
         }
